@@ -20,7 +20,7 @@ const handleError = (res, err, status = 500, message = 'Internal Server Error') 
 };
 
 app.get('/health', (req, res) => {
-    res.status(200).send('OK');
+    res.status(200).json({ status: 'healthy', api_version: '1.0' });
 });
 
 const isValidNumber = (val) => {
@@ -157,6 +157,21 @@ app.post('/api/travel-plans', async (req, res) => {
     }
 });
 
+app.get('/api/travel-plans', async (req, res) => {
+    try {
+        const result = await query(
+            `SELECT id, title, to_char(start_date, 'YYYY-MM-DD') as start_date,
+                    to_char(end_date, 'YYYY-MM-DD') as end_date, budget, currency, is_public
+             FROM travel_plans ORDER BY id`
+        );
+
+        const parsedResult = parseBudgetToNumber(result.rows);
+        res.status(200).json(parsedResult);
+    } catch (err) {
+        handleError(res, err, 500);
+    }
+});
+
 app.get('/api/travel-plans/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -225,13 +240,13 @@ app.put('/api/travel-plans/:id', async (req, res) => {
     try {
         const result = await query(
             `UPDATE travel_plans
-             SET title=COALESCE($1, title), 
-                 description=COALESCE($2, description), 
-                 start_date=COALESCE($3, start_date), 
-                 end_date=COALESCE($4, end_date), 
+             SET title=COALESCE($1, title),
+                 description=COALESCE($2, description),
+                 start_date=COALESCE($3, start_date),
+                 end_date=COALESCE($4, end_date),
                  budget=COALESCE($5, budget),
-                 currency=COALESCE($6, currency), 
-                 is_public=COALESCE($7, is_public), 
+                 currency=COALESCE($6, currency),
+                 is_public=COALESCE($7, is_public),
                  version=version+1
              WHERE id=$8 AND version=$9
              RETURNING id, title, description, to_char(start_date,'YYYY-MM-DD') as start_date,
@@ -402,7 +417,7 @@ app.put('/api/locations/:id', async (req, res) => {
                  notes=COALESCE($9, notes),
                  version=version+1
              WHERE id=$10 AND version=$11
-             RETURNING id, travel_plan_id, name, address, latitude, longitude, visit_order, 
+             RETURNING id, travel_plan_id, name, address, latitude, longitude, visit_order,
                        arrival_date, departure_date, budget, notes, version, created_at, updated_at, version as current_version`,
             [name, address, latitude, longitude, visit_order, arrival_date, departure_date, processedBudget, notes, id, currentVersion]
         );
