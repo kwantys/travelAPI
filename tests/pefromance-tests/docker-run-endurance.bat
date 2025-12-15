@@ -1,0 +1,1 @@
+set K6_WEB_DASHBOARD=true&& set K6_WEB_DASHBOARD_EXPORT=reports\html-docker-report-endurance.html&& k6 run tests/endurance-test.js

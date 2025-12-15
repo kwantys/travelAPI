@@ -1,16 +1,76 @@
 version: '3.8'
+
+name: travel_planner
+
 services:
-  db:
+  # PostgreSQL Database
+  postgres:
     image: postgres:16-alpine
-    restart: always
+    container_name: travel_planner_db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: traveler123
-      POSTGRES_DB: traveler_db
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${DB_NAME:-traveler_db}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-traveler123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-traveler_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  # Node.js API
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel_planner_api
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgres://${DB_USER:-admin}:${DB_PASSWORD:-traveler123}@postgres:5432/${DB_NAME:-traveler_db}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-traveler123}
+      DB_NAME: ${DB_NAME:-traveler_db}
+
+      # Application configuration
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4567/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
 volumes:
   postgres_data:
+    driver: local
+
+networks:
+  travel_planner_network:
+    driver: bridge
