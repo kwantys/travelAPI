@@ -1,31 +1,60 @@
 name: travel_planner
 
 services:
+<<<<<<< HEAD
   # PostgreSQL Shard 00
   postgres_00:
+=======
+  # Publisher (master)
+  postgres:
+>>>>>>> 90d83c3 (Lab 4)
     image: postgres:16-alpine
     container_name: travel_planner_db_00
     restart: unless-stopped
     environment:
+<<<<<<< HEAD
+=======
+      POSTGRES_DB: traveler_db
+>>>>>>> 90d83c3 (Lab 4)
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: traveler123
     command:
       - "postgres"
       - "-c"
       - "listen_addresses=*"
+<<<<<<< HEAD
+=======
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
+      - "-c"
+      - "hot_standby=on"
+      - "-c"
+      - "synchronous_commit=on"
+>>>>>>> 90d83c3 (Lab 4)
     volumes:
       - postgres_data_00:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./db/replications/publisher:/docker-entrypoint-replications:ro
+      - ./db/replications/common:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
     networks:
       - travel_planner_network
     healthcheck:
+<<<<<<< HEAD
       test: ["CMD-SHELL", "pg_isready -U admin"]
+=======
+      test: ["CMD-SHELL", "pg_isready -U admin -d traveler_db"]
+>>>>>>> 90d83c3 (Lab 4)
       interval: 10s
       timeout: 5s
       retries: 5
 
+<<<<<<< HEAD
   # PostgreSQL Shard 01
   postgres_01:
     image: postgres:16-alpine
@@ -97,6 +126,54 @@ services:
       - travel_planner_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin"]
+=======
+  # Subscriber (slave)
+  postgres_sub:
+    image: postgres:16-alpine
+    container_name: travel_planner_replica
+    restart: unless-stopped
+    user: postgres
+    environment:
+      POSTGRES_DB: traveler_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+      PGPASSWORD: rep_pass
+    command:
+      - "bash"
+      - "-c"
+      - |
+        # Очікуємо готовності master
+        until pg_isready -h postgres -p 5432; do sleep 1; done
+        sleep 5
+        
+        # Перевіряємо, чи дані вже існують
+        if [ ! -f "/var/lib/postgresql/data/postgresql.conf" ]; then
+          echo "Creating physical replica via pg_basebackup..."
+          # Робимо basebackup
+          pg_basebackup -h postgres -D /var/lib/postgresql/data -U repuser -P -v -R -X stream
+          echo "Base backup completed successfully"
+        
+          echo "Fixing directory permissions..."
+          chmod 700 /var/lib/postgresql/data
+          echo "Permissions fixed"
+        else
+          echo "Data directory already exists, starting PostgreSQL..."
+        fi
+        
+        # Запускаємо PostgreSQL
+        exec postgres
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"
+    networks:
+      - travel_planner_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d traveler_db"]
+>>>>>>> 90d83c3 (Lab 4)
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,13 +186,24 @@ services:
     container_name: travel_planner_api
     restart: unless-stopped
     environment:
+<<<<<<< HEAD
+=======
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: traveler123
+      DB_DATABASE: traveler_db
+>>>>>>> 90d83c3 (Lab 4)
       NODE_ENV: production
       PORT: 3000
       # Database configuration will be handled via mapping.json
     ports:
       - "3000:3000"
+<<<<<<< HEAD
     volumes:
       - ./mapping.json:/app/mapping.json:ro
+=======
+>>>>>>> 90d83c3 (Lab 4)
     depends_on:
       postgres_00:
         condition: service_healthy
@@ -134,10 +222,15 @@ services:
       retries: 3
 
 volumes:
+<<<<<<< HEAD
   postgres_data_00:
   postgres_data_01:
   postgres_data_02:
   postgres_data_03:
+=======
+  postgres_data:
+  postgres_replica_data:
+>>>>>>> 90d83c3 (Lab 4)
 
 networks:
   travel_planner_network:

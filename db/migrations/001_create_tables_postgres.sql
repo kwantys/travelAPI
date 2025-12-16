@@ -1,5 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+<<<<<<< HEAD
+=======
+-- Таблиця TravelPlans
+>>>>>>> 90d83c3 (Lab 4)
 CREATE TABLE travel_plans (
                               id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
                               title VARCHAR(200) NOT NULL CHECK (length(title) > 0),
@@ -14,6 +18,10 @@ CREATE TABLE travel_plans (
                               updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+<<<<<<< HEAD
+=======
+-- Тригерна функція для оновлення updated_at
+>>>>>>> 90d83c3 (Lab 4)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
 BEGIN
@@ -22,11 +30,22 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+<<<<<<< HEAD
+=======
+-- Тригер для travel_plans
+>>>>>>> 90d83c3 (Lab 4)
 CREATE TRIGGER update_travel_plans_updated_at
     BEFORE UPDATE ON travel_plans
     FOR EACH ROW
 EXECUTE PROCEDURE update_updated_at_column();
 
+<<<<<<< HEAD
+=======
+
+-- Таблиця Locations
+-- УВАГА: Для повного рішення Проблеми 3 (Optimistic Locking)
+-- потрібно додати колонку version до locations, але ми залишаємо як у першій версії схеми.
+>>>>>>> 90d83c3 (Lab 4)
 CREATE TABLE locations (
                            id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
                            travel_plan_id uuid NOT NULL REFERENCES travel_plans(id) ON DELETE CASCADE,
@@ -43,9 +62,17 @@ CREATE TABLE locations (
                            created_at TIMESTAMPTZ DEFAULT NOW(),
                            updated_at TIMESTAMPTZ DEFAULT NOW(),
 
+<<<<<<< HEAD
                            UNIQUE (travel_plan_id, visit_order)
 );
 
+=======
+    -- Обмеження для консистентності порядку (Проблема 2)
+                           UNIQUE (travel_plan_id, visit_order)
+);
+
+-- Тригер для locations
+>>>>>>> 90d83c3 (Lab 4)
 CREATE TRIGGER update_locations_updated_at
     BEFORE UPDATE ON locations
     FOR EACH ROW
