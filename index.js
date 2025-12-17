@@ -1,5 +1,6 @@
 const express = require('express');
-const { query, pool } = require('./db');
+const { v4: uuidv4 } = require('uuid');
+const db = require('./db');
 require('dotenv').config();
 
 const app = express();
@@ -19,8 +20,29 @@ const handleError = (res, err, status = 500, message = 'Internal Server Error') 
     res.status(status).json({ error: message });
 };
 
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'healthy', api_version: '1.0' });
+app.get('/health', async (req, res) => {
+    try {
+        const shardStatus = await db.getShardStatus();
+        res.status(200).json({
+            status: 'healthy',
+            api_version: '1.0',
+            shards: shardStatus
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'unhealthy',
+            error: error.message
+        });
+    }
+});
+
+app.get('/shards/info', async (req, res) => {
+    try {
+        const shardInfo = await db.getShardInfo();
+        res.status(200).json(shardInfo);
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 const isValidNumber = (val) => {
@@ -136,18 +158,18 @@ app.post('/api/travel-plans', async (req, res) => {
     }
 
     try {
-        const result = await query(
-            `INSERT INTO travel_plans (title, description, start_date, end_date, budget, currency, is_public)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING id, title, description, to_char(start_date, 'YYYY-MM-DD') as start_date,
-                 to_char(end_date, 'YYYY-MM-DD') as end_date, budget,
-                 currency, is_public, version, created_at, updated_at, version as current_version`,
-            [title, description, start_date, end_date, budget, currency, is_public]
+        const id = uuidv4();
+
+        const result = await db.createTravelPlan(
+            id, title, description, start_date, end_date, budget, currency, is_public
         );
 
         const parsedResult = parseBudgetToNumber(result.rows);
-        console.log('SUCCESS: Travel plan created with ID:', parsedResult[0].id);
-        res.status(201).json(parsedResult[0]);
+        console.log('SUCCESS: Travel plan created with ID:', parsedResult[0].id, 'on shard:', result.shard);
+        res.status(201).json({
+            ...parsedResult[0],
+            shard: result.shard
+        });
     } catch (err) {
         console.log('DATABASE ERROR:', err.code, err.message);
         if (err.code && (err.code.startsWith('22') || err.code === '23514')) {
@@ -159,12 +181,7 @@ app.post('/api/travel-plans', async (req, res) => {
 
 app.get('/api/travel-plans', async (req, res) => {
     try {
-        const result = await query(
-            `SELECT id, title, to_char(start_date, 'YYYY-MM-DD') as start_date,
-                    to_char(end_date, 'YYYY-MM-DD') as end_date, budget, currency, is_public
-             FROM travel_plans ORDER BY id`
-        );
-
+        const result = await db.getAllTravelPlans();
         const parsedResult = parseBudgetToNumber(result.rows);
         res.status(200).json(parsedResult);
     } catch (err) {
@@ -175,22 +192,16 @@ app.get('/api/travel-plans', async (req, res) => {
 app.get('/api/travel-plans/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const planResult = await query(
-            `SELECT id, title, description, to_char(start_date, 'YYYY-MM-DD') as start_date,
-                    to_char(end_date, 'YYYY-MM-DD') as end_date, budget,
-                    currency, is_public, version, created_at, updated_at
-             FROM travel_plans WHERE id = $1`,
-            [id]
-        );
-        if (planResult.rowCount === 0) return res.status(404).json({ error: 'Plan not found.' });
+        const planResult = await db.getTravelPlanById(id);
+        if (!planResult.rows || planResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Plan not found.' });
+        }
 
-        const locationsResult = await query(
-            'SELECT *, version as current_version FROM locations WHERE travel_plan_id = $1 ORDER BY visit_order',
-            [id]
-        );
+        const locationsResult = await db.getLocationsByTravelPlanId(id);
 
         const plan = parseBudgetToNumber(planResult.rows)[0];
         plan.locations = parseBudgetToNumber(locationsResult.rows);
+        plan.shard = planResult.shard;
 
         res.status(200).json(plan);
     } catch (err) {
@@ -238,26 +249,15 @@ app.put('/api/travel-plans/:id', async (req, res) => {
     }
 
     try {
-        const result = await query(
-            `UPDATE travel_plans
-             SET title=COALESCE($1, title),
-                 description=COALESCE($2, description),
-                 start_date=COALESCE($3, start_date),
-                 end_date=COALESCE($4, end_date),
-                 budget=COALESCE($5, budget),
-                 currency=COALESCE($6, currency),
-                 is_public=COALESCE($7, is_public),
-                 version=version+1
-             WHERE id=$8 AND version=$9
-             RETURNING id, title, description, to_char(start_date,'YYYY-MM-DD') as start_date,
-                 to_char(end_date,'YYYY-MM-DD') as end_date, budget,
-                 currency, is_public, version, created_at, updated_at, version as current_version`,
-            [title, description, start_date, end_date, budget, currency, is_public, id, version]
+        const result = await db.updateTravelPlan(
+            id, title, description, start_date, end_date, budget, currency, is_public, version
         );
 
         if (result.rowCount === 0) {
-            const checkResult = await query('SELECT version FROM travel_plans WHERE id=$1', [id]);
-            if (checkResult.rowCount === 0) return res.status(404).json({ error: 'Plan not found.' });
+            const checkResult = await db.getTravelPlanById(id);
+            if (!checkResult.rows || checkResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Plan not found.' });
+            }
 
             return res.status(409).json({
                 error: 'Conflict: Plan has been modified',
@@ -266,7 +266,10 @@ app.put('/api/travel-plans/:id', async (req, res) => {
         }
 
         const parsedResult = parseBudgetToNumber(result.rows);
-        res.status(200).json(parsedResult[0]);
+        res.status(200).json({
+            ...parsedResult[0],
+            shard: result.shard
+        });
     } catch (err) {
         if (err.code && (err.code.startsWith('22') || err.code === '23514')) {
             return res.status(400).json({ error: 'Validation error' });
@@ -278,7 +281,7 @@ app.put('/api/travel-plans/:id', async (req, res) => {
 app.delete('/api/travel-plans/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const result = await query('DELETE FROM travel_plans WHERE id=$1', [id]);
+        const result = await db.deleteTravelPlan(id);
         if (result.rowCount === 0) return res.status(404).json({ error: 'Plan not found.' });
         res.status(204).send();
     } catch (err) {
@@ -316,45 +319,23 @@ app.post('/api/travel-plans/:id/locations', async (req, res) => {
         return res.status(400).json({ error: 'Validation error' });
     }
 
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-        const planCheck = await client.query('SELECT 1 FROM travel_plans WHERE id=$1 FOR UPDATE', [planId]);
-        if (planCheck.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ error: 'Travel Plan not found.' });
-        }
-
-        const maxOrderResult = await client.query(
-            'SELECT MAX(visit_order) as max_order FROM locations WHERE travel_plan_id=$1',
-            [planId]
-        );
-        const newOrder = (maxOrderResult.rows[0].max_order || 0) + 1;
-
-        const insertResult = await client.query(
-            `INSERT INTO locations (travel_plan_id, name, address, latitude, longitude, visit_order,
-                                     arrival_date, departure_date, budget, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-             RETURNING id, travel_plan_id, name, address, latitude, longitude, visit_order,
-                       arrival_date, departure_date, budget, notes, version, created_at, updated_at, version as current_version`,
-            [planId, name, address, latitude, longitude, newOrder, arrival_date, departure_date, budget, notes]
+        const result = await db.createLocation(
+            planId, name, address, latitude, longitude, arrival_date, departure_date, budget, notes
         );
 
-        await client.query('COMMIT');
-
-        const parsedResult = parseBudgetToNumber(insertResult.rows);
+        const parsedResult = parseBudgetToNumber(result.rows);
         res.status(201).json(parsedResult[0]);
     } catch (err) {
-        await client.query('ROLLBACK');
         if (err.code === '23505') {
             handleError(res, err, 409, 'Conflict: Could not determine unique visit order.');
         } else if (err.code && (err.code.startsWith('22') || err.code === '23514')) {
             return res.status(400).json({ error: 'Validation error' });
+        } else if (err.message.includes('Travel Plan not found')) {
+            return res.status(404).json({ error: 'Travel Plan not found.' });
         } else {
             handleError(res, err, 400, 'Validation error');
         }
-    } finally {
-        client.release();
     }
 });
 
@@ -364,10 +345,11 @@ app.put('/api/locations/:id', async (req, res) => {
 
     let currentVersion = version;
 
+    // Якщо версія не надана, отримуємо поточну
     if (currentVersion === undefined || currentVersion === null) {
         try {
-            const versionResult = await query('SELECT version FROM locations WHERE id = $1', [id]);
-            if (versionResult.rowCount === 0) {
+            const versionResult = await db.getLocationById(id);
+            if (!versionResult.rows || versionResult.rows.length === 0) {
                 return res.status(404).json({ error: 'Location not found.' });
             }
             currentVersion = versionResult.rows[0].version;
@@ -404,27 +386,15 @@ app.put('/api/locations/:id', async (req, res) => {
     try {
         const processedBudget = budget !== undefined ? Number(budget) : undefined;
 
-        const result = await query(
-            `UPDATE locations
-             SET name=COALESCE($1, name),
-                 address=COALESCE($2, address),
-                 latitude=COALESCE($3, latitude),
-                 longitude=COALESCE($4, longitude),
-                 visit_order=COALESCE($5, visit_order),
-                 arrival_date=COALESCE($6, arrival_date),
-                 departure_date=COALESCE($7, departure_date),
-                 budget=COALESCE($8, budget),
-                 notes=COALESCE($9, notes),
-                 version=version+1
-             WHERE id=$10 AND version=$11
-             RETURNING id, travel_plan_id, name, address, latitude, longitude, visit_order,
-                       arrival_date, departure_date, budget, notes, version, created_at, updated_at, version as current_version`,
-            [name, address, latitude, longitude, visit_order, arrival_date, departure_date, processedBudget, notes, id, currentVersion]
+        const result = await db.updateLocation(
+            id, name, address, latitude, longitude, visit_order, arrival_date, departure_date, processedBudget, notes, currentVersion
         );
 
         if (result.rowCount === 0) {
-            const checkResult = await query('SELECT version FROM locations WHERE id=$1', [id]);
-            if (checkResult.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
+            const checkResult = await db.getLocationById(id);
+            if (!checkResult.rows || checkResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Location not found.' });
+            }
 
             return res.status(409).json({
                 error: 'Conflict: Location has been modified',
@@ -448,7 +418,7 @@ app.put('/api/locations/:id', async (req, res) => {
 app.delete('/api/locations/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const result = await query('DELETE FROM locations WHERE id=$1', [id]);
+        const result = await db.deleteLocation(id);
         if (result.rowCount === 0) return res.status(404).json({ error: 'Location not found.' });
         res.status(204).send();
     } catch (err) {

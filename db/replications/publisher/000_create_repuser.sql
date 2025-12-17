@@ -1,0 +1,2 @@
+CREATE ROLE repuser WITH LOGIN REPLICATION PASSWORD 'rep_pass';
+GRANT CONNECT ON DATABASE traveler_db TO repuser;

@@ -1,10 +1,10 @@
-const { pool } = require('./db');
+const { pool } = require('../db');
 const fs = require('fs');
 
 async function migrate() {
     const client = await pool.connect();
     try {
-        const sql = fs.readFileSync('docs/schema.sql', 'utf8');
+        const sql = fs.readFileSync('../docs/schema.sql', 'utf8');
         await client.query(sql);
         console.log('Міграція успішно завершена.');
     } catch (err) {

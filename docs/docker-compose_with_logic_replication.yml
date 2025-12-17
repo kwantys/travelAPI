@@ -1,0 +1,105 @@
+name: travel_planner
+
+services:
+  # Publisher (master)
+  postgres:
+    image: postgres:16-alpine
+    container_name: travel_planner_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: traveler_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+    command:
+      - "postgres"
+      - "-c"
+      - "listen_addresses=*"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=10"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_logical_replication_workers=4"
+      - "-c"
+      - "max_worker_processes=10"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./db/replications/publisher:/docker-entrypoint-replications:ro
+      - ./db/replications/common:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d traveler_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Subscriber (slave)
+  postgres_sub:
+    image: postgres:16-alpine
+    container_name: travel_planner_replica
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: traveler_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./db/replications/subscriber:/docker-entrypoint-replications:ro
+      - ./db/replications/common:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "55432:5432"
+    networks:
+      - travel_planner_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d traveler_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Node.js API
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel_planner_api
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: traveler123
+      DB_DATABASE: traveler_db
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres_sub:
+        condition: service_healthy
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  postgres_replica_data:
+
+networks:
+  travel_planner_network:
+    driver: bridge

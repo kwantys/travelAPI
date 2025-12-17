@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/db/migrations/001_create_tables_postgres.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/db/migrations/001_init_sharding.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/db/replications/publisher/000_create_repuser.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/db/replications/publisher/010_create_publication.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/db/replications/subscriber/900_create_subscription.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/docs/schema.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/index.js" dialect="PostgreSQL" />
+  </component>
+</project>

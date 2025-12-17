@@ -8,7 +8,12 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "init-databases": "node scripts/init-databases.js",
+    "migrate-all": "node scripts/migrate-all.js",
+    "health-check": "node scripts/health-check.js"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +22,7 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "uuid": "^9.0.1",
     "pg": "^8.16.3"
   }
 }

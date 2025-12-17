@@ -1,34 +1,105 @@
-version: '3.8'
-
 name: travel_planner
 
 services:
-  # PostgreSQL Database
-  postgres:
+  # PostgreSQL Shard 00
+  postgres_00:
     image: postgres:16-alpine
-    container_name: travel_planner_db
+    container_name: travel_planner_db_00
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-traveler_db}
-      POSTGRES_USER: ${DB_USER:-admin}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-traveler123}
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+    command:
+      - "postgres"
+      - "-c"
+      - "listen_addresses=*"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_00:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "5432:5432"
     networks:
       - travel_planner_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-traveler_db}"]
+      test: ["CMD-SHELL", "pg_isready -U admin"]
       interval: 10s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
+
+  # PostgreSQL Shard 01
+  postgres_01:
+    image: postgres:16-alpine
+    container_name: travel_planner_db_01
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+    command:
+      - "postgres"
+      - "-c"
+      - "listen_addresses=*"
+    volumes:
+      - postgres_data_01:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Shard 02
+  postgres_02:
+    image: postgres:16-alpine
+    container_name: travel_planner_db_02
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+    command:
+      - "postgres"
+      - "-c"
+      - "listen_addresses=*"
+    volumes:
+      - postgres_data_02:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5434:5432"
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Shard 03
+  postgres_03:
+    image: postgres:16-alpine
+    container_name: travel_planner_db_03
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: traveler123
+    command:
+      - "postgres"
+      - "-c"
+      - "listen_addresses=*"
+    volumes:
+      - postgres_data_03:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5435:5432"
+    networks:
+      - travel_planner_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Node.js API
   app:
@@ -38,38 +109,35 @@ services:
     container_name: travel_planner_api
     restart: unless-stopped
     environment:
-      # Database configuration
-      DATABASE_URL: postgres://${DB_USER:-admin}:${DB_PASSWORD:-traveler123}@postgres:5432/${DB_NAME:-traveler_db}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-admin}
-      DB_PASSWORD: ${DB_PASSWORD:-traveler123}
-      DB_NAME: ${DB_NAME:-traveler_db}
-
-      # Application configuration
       NODE_ENV: production
       PORT: 3000
+      # Database configuration will be handled via mapping.json
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "3000:3000"
+    volumes:
+      - ./mapping.json:/app/mapping.json:ro
     depends_on:
-      postgres:
+      postgres_00:
+        condition: service_healthy
+      postgres_01:
+        condition: service_healthy
+      postgres_02:
+        condition: service_healthy
+      postgres_03:
         condition: service_healthy
     networks:
       - travel_planner_network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4567/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
 
 volumes:
-  postgres_data:
-    driver: local
+  postgres_data_00:
+  postgres_data_01:
+  postgres_data_02:
+  postgres_data_03:
 
 networks:
   travel_planner_network:

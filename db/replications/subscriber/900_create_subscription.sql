@@ -1,0 +1,1 @@
+SELECT 'Physical replication - no subscriptions needed' as info;

@@ -1,0 +1,18 @@
+{
+  "db_0": "postgresql://admin:traveler123@postgres_00:5432/db_0",
+  "db_1": "postgresql://admin:traveler123@postgres_00:5432/db_1",
+  "db_2": "postgresql://admin:traveler123@postgres_00:5432/db_2",
+  "db_3": "postgresql://admin:traveler123@postgres_00:5432/db_3",
+  "db_4": "postgresql://admin:traveler123@postgres_01:5432/db_4",
+  "db_5": "postgresql://admin:traveler123@postgres_01:5432/db_5",
+  "db_6": "postgresql://admin:traveler123@postgres_01:5432/db_6",
+  "db_7": "postgresql://admin:traveler123@postgres_01:5432/db_7",
+  "db_8": "postgresql://admin:traveler123@postgres_02:5432/db_8",
+  "db_9": "postgresql://admin:traveler123@postgres_02:5432/db_9",
+  "db_a": "postgresql://admin:traveler123@postgres_02:5432/db_a",
+  "db_b": "postgresql://admin:traveler123@postgres_02:5432/db_b",
+  "db_c": "postgresql://admin:traveler123@postgres_03:5432/db_c",
+  "db_d": "postgresql://admin:traveler123@postgres_03:5432/db_d",
+  "db_e": "postgresql://admin:traveler123@postgres_03:5432/db_e",
+  "db_f": "postgresql://admin:traveler123@postgres_03:5432/db_f"
+}
